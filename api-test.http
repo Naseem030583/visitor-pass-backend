@@ -1,0 +1,145 @@
+# VISITOR PASS API - TEST FILE
+
+### ==========================================
+### 1. REGISTER ADMIN
+### ==========================================
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+    "name": "Admin User",
+    "email": "admin@visitor.com",
+    "password": "admin123",
+    "role": "admin",
+    "department": "Management",
+    "phone": "9876543210"
+}
+
+
+### ==========================================
+### 2. REGISTER SECURITY
+### ==========================================
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+    "name": "Security Guard",
+    "email": "security@visitor.com",
+    "password": "security123",
+    "role": "security",
+    "department": "Security",
+    "phone": "9876543211"
+}
+
+
+### ==========================================
+### 3. REGISTER EMPLOYEE
+### ==========================================
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+    "name": "Naseem Ahamad",
+    "email": "naseem@visitor.com",
+    "password": "naseem123",
+    "role": "employee",
+    "department": "IT",
+    "phone": "9876543212"
+}
+
+
+### ==========================================
+### 4. LOGIN (Get Token)
+### ==========================================
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+    "email": "admin@visitor.com",
+    "password": "admin123"
+}
+
+
+### ==========================================
+### 5. GET PROFILE (Paste token below)
+### ==========================================
+GET http://localhost:3000/api/auth/profile
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+
+
+### ==========================================
+### 6. GET ALL USERS (Admin only)
+### ==========================================
+GET http://localhost:3000/api/auth/users
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+
+
+### ==========================================
+### 7. CREATE VISITOR (Paste token below)
+### Replace HOST_ID with employee _id
+### ==========================================
+POST http://localhost:3000/api/visitors
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+Content-Type: application/json
+
+{
+    "name": "Rahul Sharma",
+    "email": "rahul@gmail.com",
+    "phone": "8765432100",
+    "company": "TechCorp",
+    "purpose": "Business Meeting",
+    "host": "699b7a5c6934e5242725f325",
+    "expectedDate": "2026-02-23"
+}
+
+
+### ==========================================
+### 8. GET ALL VISITORS
+### ==========================================
+GET http://localhost:3000/api/visitors
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+
+
+### ==========================================
+### 9. APPROVE VISITOR (Replace ID)
+### ==========================================
+PATCH http://localhost:3000/api/visitors/PASTE_VISITOR_ID_HERE/approve
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+
+
+### ==========================================
+### 10. CHECK-IN VISITOR (Replace passCode)
+### ==========================================
+POST http://localhost:3000/api/visitors/check-in
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+Content-Type: application/json
+
+{
+    "passCode": "PASTE_PASSCODE_HERE"
+}
+
+
+### ==========================================
+### 11. CHECK-OUT VISITOR
+### ==========================================
+POST http://localhost:3000/api/visitors/check-out
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+Content-Type: application/json
+
+{
+    "passCode": "PASTE_PASSCODE_HERE"
+}
+
+
+### ==========================================
+### 12. DASHBOARD STATS
+### ==========================================
+GET http://localhost:3000/api/visitors/stats
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
+
+
+### ==========================================
+### 13. DELETE VISITOR (Admin only)
+### ==========================================
+DELETE http://localhost:3000/api/visitors/PASTE_VISITOR_ID_HERE
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWI3YTVjNjkzNGU1MjQyNzI1ZjMyNSIsImlhdCI6MTc3MTc5NzU4MiwiZXhwIjoxNzcyNDAyMzgyfQ.LD50YHCJN-zd7xXLrVlubLx-L1dKqwqbrYSgf0hzM_o
