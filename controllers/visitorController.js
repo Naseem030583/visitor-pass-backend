@@ -8,7 +8,6 @@ const createVisitor = async (req, res) => {
             ...req.body,
             createdBy: req.user._id
         };
-        // Convert uploaded photo to base64 string and store in DB
         if (req.file) {
             const base64Photo = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
             visitorData.photo = base64Photo;
@@ -136,13 +135,16 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-// Generate PDF Badge - Single Page with Photo
+// Generate PDF Badge - Matching reference design
 const generatePDF = async (req, res) => {
     try {
         const visitor = await visitorService.getVisitorById(req.params.id);
 
+        const pageW = 400;
+        const pageH = 550;
+
         const doc = new PDFDocument({
-            size: [350, 500],
+            size: [pageW, pageH],
             margins: { top: 0, bottom: 0, left: 0, right: 0 }
         });
 
@@ -151,89 +153,113 @@ const generatePDF = async (req, res) => {
 
         doc.pipe(res);
 
-        // ---- HEADER ----
-        doc.rect(0, 0, 350, 55).fill('#e94560');
-        doc.fontSize(18).fill('#ffffff').text('VISITOR PASS', 0, 12, { align: 'center' });
-        doc.fontSize(8).fill('#ffffff').text('Visitor Pass Management System', 0, 35, { align: 'center' });
+        // ===== RED HEADER BAR =====
+        const headerH = 80;
+        doc.rect(0, 0, pageW, headerH).fill('#e94560');
+        doc.fontSize(22).fill('#ffffff').text('VISITOR PASS', 0, 20, { width: pageW, align: 'center' });
+        doc.fontSize(9).fill('#ffffff').text('Visitor Pass Management System', 0, 48, { width: pageW, align: 'center' });
 
-        // ---- STATUS BADGE ----
-        const statusColor = visitor.status === 'approved' ? '#4ecca3' : visitor.status === 'checked-in' ? '#2196f3' : visitor.status === 'checked-out' ? '#888888' : '#ffc107';
-        doc.roundedRect(125, 62, 100, 18, 9).fill(statusColor);
-        doc.fontSize(8).fill('#ffffff').text(visitor.status.toUpperCase(), 125, 66, { width: 100, align: 'center' });
+        // ===== CIRCULAR PHOTO (overlapping header) =====
+        const photoRadius = 45;
+        const photoCenterX = pageW / 2;
+        const photoCenterY = headerH + 5; // slightly below header edge
 
-        let y = 88;
-
-        // ---- VISITOR PHOTO ----
         if (visitor.photo && visitor.photo.startsWith('data:image')) {
             try {
                 const base64Data = visitor.photo.replace(/^data:image\/\w+;base64,/, '');
                 const photoBuffer = Buffer.from(base64Data, 'base64');
+                // White circle background
+                doc.circle(photoCenterX, photoCenterY, photoRadius + 3).fill('#ffffff');
+                // Clip to circle and draw photo
                 doc.save();
-                doc.circle(175, y + 30, 32).clip();
-                doc.image(photoBuffer, 143, y - 2, { width: 64, height: 64, fit: [64, 64] });
+                doc.circle(photoCenterX, photoCenterY, photoRadius).clip();
+                doc.image(photoBuffer, photoCenterX - photoRadius, photoCenterY - photoRadius, {
+                    width: photoRadius * 2,
+                    height: photoRadius * 2
+                });
                 doc.restore();
-                doc.circle(175, y + 30, 32).lineWidth(2).stroke('#e94560');
-                y += 70;
-            } catch (photoErr) {
-                // Skip photo if error
+                // Red circle border
+                doc.circle(photoCenterX, photoCenterY, photoRadius).lineWidth(2.5).stroke('#e94560');
+            } catch (e) {
+                // Skip photo on error
             }
+        } else {
+            // No photo - gray placeholder circle
+            doc.circle(photoCenterX, photoCenterY, photoRadius + 3).fill('#ffffff');
+            doc.circle(photoCenterX, photoCenterY, photoRadius).fill('#f0f0f0');
+            doc.fontSize(30).fill('#cccccc').text('👤', photoCenterX - 15, photoCenterY - 18);
         }
 
-        // ---- VISITOR NAME ----
-        doc.fontSize(14).fill('#333333').text(visitor.name, 20, y, { width: 310, align: 'center' });
-        y += 22;
+        let y = photoCenterY + photoRadius + 12;
 
-        // ---- DETAILS (compact two-column layout) ----
-        const leftX = 25;
-        const rightX = 185;
-        const labelSize = 7;
-        const valueSize = 9;
-        const rowHeight = 28;
+        // ===== STATUS BADGE =====
+        const statusColor = visitor.status === 'approved' ? '#4ecca3' : visitor.status === 'checked-in' ? '#2196f3' : visitor.status === 'checked-out' ? '#888888' : '#ffc107';
+        const badgeW = 120;
+        doc.roundedRect((pageW - badgeW) / 2, y, badgeW, 20, 10).fill(statusColor);
+        doc.fontSize(9).fill('#ffffff').text(visitor.status.toUpperCase(), (pageW - badgeW) / 2, y + 5, { width: badgeW, align: 'center' });
+        y += 30;
 
-        // Row 1: Company | Purpose
-        doc.fontSize(labelSize).fill('#888888').text('COMPANY', leftX, y);
-        doc.fontSize(valueSize).fill('#333333').text(visitor.company || 'N/A', leftX, y + 10, { width: 140 });
-        doc.fontSize(labelSize).fill('#888888').text('PURPOSE', rightX, y);
-        doc.fontSize(valueSize).fill('#333333').text(visitor.purpose, rightX, y + 10, { width: 140 });
-        y += rowHeight;
+        // ===== VISITOR NAME =====
+        doc.fontSize(18).fill('#333333').text(visitor.name, 0, y, { width: pageW, align: 'center' });
+        y += 28;
 
-        // Row 2: Host | Phone
-        doc.fontSize(labelSize).fill('#888888').text('HOST', leftX, y);
-        doc.fontSize(valueSize).fill('#333333').text(visitor.host?.name || 'N/A', leftX, y + 10, { width: 140 });
-        doc.fontSize(labelSize).fill('#888888').text('PHONE', rightX, y);
-        doc.fontSize(valueSize).fill('#333333').text(visitor.phone, rightX, y + 10, { width: 140 });
-        y += rowHeight;
+        // ===== DETAILS (single column, centered) =====
+        const labelSize = 8;
+        const valueSize = 12;
+        const detailGap = 32;
+        const leftMargin = 40;
 
-        // Row 3: Date | Email
-        doc.fontSize(labelSize).fill('#888888').text('EXPECTED DATE', leftX, y);
-        doc.fontSize(valueSize).fill('#333333').text(new Date(visitor.expectedDate).toLocaleDateString(), leftX, y + 10, { width: 140 });
-        doc.fontSize(labelSize).fill('#888888').text('EMAIL', rightX, y);
-        doc.fontSize(valueSize).fill('#333333').text(visitor.email || 'N/A', rightX, y + 10, { width: 140 });
-        y += rowHeight + 5;
+        // COMPANY
+        doc.fontSize(labelSize).fill('#878787').text('COMPANY:', leftMargin, y);
+        y += 13;
+        doc.fontSize(valueSize).fill('#333333').text(visitor.company || 'N/A', leftMargin, y);
+        y += detailGap - 10;
 
-        // ---- DIVIDER ----
-        doc.moveTo(25, y).lineTo(325, y).lineWidth(0.5).stroke('#cccccc');
-        y += 8;
+        // PURPOSE OF VISIT
+        doc.fontSize(labelSize).fill('#878787').text('PURPOSE OF VISIT', leftMargin, y);
+        y += 13;
+        doc.fontSize(valueSize).fill('#333333').text(visitor.purpose, leftMargin, y);
+        y += detailGap - 10;
 
-        // ---- PASS CODE ----
-        doc.roundedRect(75, y, 200, 28, 5).fill('#f0f0f0');
-        doc.fontSize(7).fill('#888888').text('PASS CODE', 75, y + 3, { width: 200, align: 'center' });
-        doc.fontSize(13).fill('#e94560').text(visitor.passCode, 75, y + 13, { width: 200, align: 'center' });
-        y += 35;
+        // HOST
+        doc.fontSize(labelSize).fill('#878787').text('HOST', leftMargin, y);
+        y += 13;
+        doc.fontSize(valueSize).fill('#333333').text(visitor.host?.name || 'N/A', leftMargin, y);
+        y += detailGap - 10;
 
-        // ---- QR CODE ----
+        // PHONE
+        doc.fontSize(labelSize).fill('#878787').text('PHONE', leftMargin, y);
+        y += 13;
+        doc.fontSize(valueSize).fill('#333333').text(visitor.phone, leftMargin, y);
+        y += detailGap - 10;
+
+        // EXPECTED DATE
+        doc.fontSize(labelSize).fill('#878787').text('EXPECTED DATE', leftMargin, y);
+        y += 13;
+        doc.fontSize(valueSize).fill('#333333').text(new Date(visitor.expectedDate).toLocaleDateString(), leftMargin, y);
+        y += detailGap - 5;
+
+        // ===== PASS CODE BOX =====
+        const boxW = 280;
+        const boxH = 35;
+        doc.roundedRect((pageW - boxW) / 2, y, boxW, boxH, 6).fill('#f0f0f0');
+        doc.fontSize(7).fill('#878787').text('PASS CODE', (pageW - boxW) / 2, y + 4, { width: boxW, align: 'center' });
+        doc.fontSize(15).fill('#e94560').text(visitor.passCode, (pageW - boxW) / 2, y + 16, { width: boxW, align: 'center' });
+        y += boxH + 12;
+
+        // ===== QR CODE =====
         if (visitor.qrCode) {
             const qrBase64 = visitor.qrCode.replace(/^data:image\/png;base64,/, '');
             const qrBuffer = Buffer.from(qrBase64, 'base64');
-            const qrSize = 80;
-            doc.image(qrBuffer, (350 - qrSize) / 2, y, { width: qrSize, height: qrSize });
-            y += qrSize + 5;
-            doc.fontSize(6).fill('#888888').text('Scan QR Code for verification', 0, y, { width: 350, align: 'center' });
+            const qrSize = 90;
+            doc.image(qrBuffer, (pageW - qrSize) / 2, y, { width: qrSize, height: qrSize });
+            y += qrSize + 6;
+            doc.fontSize(7).fill('#878787').text('Scan QR Code for verification', 0, y, { width: pageW, align: 'center' });
         }
 
-        // ---- FOOTER ----
-        doc.rect(0, 480, 350, 20).fill('#1a1a2e');
-        doc.fontSize(6).fill('#ffffff').text('Generated by Visitor Pass Management System', 0, 486, { width: 350, align: 'center' });
+        // ===== DARK FOOTER BAR =====
+        doc.rect(0, pageH - 25, pageW, 25).fill('#1a1a2e');
+        doc.fontSize(7).fill('#ffffff').text('Generated by Visitor Pass Management System', 0, pageH - 17, { width: pageW, align: 'center' });
 
         doc.end();
     } catch (error) {
