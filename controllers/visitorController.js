@@ -1,7 +1,5 @@
 const visitorService = require('../services/visitorService');
 const PDFDocument = require('pdfkit');
-const path = require('path');
-const fs = require('fs');
 
 // Create visitor
 const createVisitor = async (req, res) => {
@@ -10,8 +8,10 @@ const createVisitor = async (req, res) => {
             ...req.body,
             createdBy: req.user._id
         };
+        // Convert uploaded photo to base64 string and store in DB
         if (req.file) {
-            visitorData.photo = req.file.filename;
+            const base64Photo = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+            visitorData.photo = base64Photo;
         }
         const visitor = await visitorService.createVisitor(visitorData);
         res.status(201).json({
@@ -53,7 +53,8 @@ const updateVisitor = async (req, res) => {
     try {
         const updateData = { ...req.body };
         if (req.file) {
-            updateData.photo = req.file.filename;
+            const base64Photo = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+            updateData.photo = base64Photo;
         }
         const visitor = await visitorService.updateVisitor(req.params.id, updateData);
         res.status(200).json({
@@ -135,7 +136,7 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-// Generate PDF Badge - Single Page
+// Generate PDF Badge - Single Page with Photo
 const generatePDF = async (req, res) => {
     try {
         const visitor = await visitorService.getVisitorById(req.params.id);
@@ -163,16 +164,18 @@ const generatePDF = async (req, res) => {
         let y = 88;
 
         // ---- VISITOR PHOTO ----
-        if (visitor.photo) {
-            const photoPath = path.join(__dirname, '..', 'uploads', visitor.photo);
-            if (fs.existsSync(photoPath)) {
-                // Draw circular border
+        if (visitor.photo && visitor.photo.startsWith('data:image')) {
+            try {
+                const base64Data = visitor.photo.replace(/^data:image\/\w+;base64,/, '');
+                const photoBuffer = Buffer.from(base64Data, 'base64');
                 doc.save();
                 doc.circle(175, y + 30, 32).clip();
-                doc.image(photoPath, 143, y - 2, { width: 64, height: 64, fit: [64, 64] });
+                doc.image(photoBuffer, 143, y - 2, { width: 64, height: 64, fit: [64, 64] });
                 doc.restore();
                 doc.circle(175, y + 30, 32).lineWidth(2).stroke('#e94560');
                 y += 70;
+            } catch (photoErr) {
+                // Skip photo if error
             }
         }
 
@@ -180,7 +183,7 @@ const generatePDF = async (req, res) => {
         doc.fontSize(14).fill('#333333').text(visitor.name, 20, y, { width: 310, align: 'center' });
         y += 22;
 
-        // ---- DETAILS (compact layout) ----
+        // ---- DETAILS (compact two-column layout) ----
         const leftX = 25;
         const rightX = 185;
         const labelSize = 7;
@@ -220,8 +223,8 @@ const generatePDF = async (req, res) => {
 
         // ---- QR CODE ----
         if (visitor.qrCode) {
-            const base64Data = visitor.qrCode.replace(/^data:image\/png;base64,/, '');
-            const qrBuffer = Buffer.from(base64Data, 'base64');
+            const qrBase64 = visitor.qrCode.replace(/^data:image\/png;base64,/, '');
+            const qrBuffer = Buffer.from(qrBase64, 'base64');
             const qrSize = 80;
             doc.image(qrBuffer, (350 - qrSize) / 2, y, { width: qrSize, height: qrSize });
             y += qrSize + 5;
