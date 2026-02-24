@@ -135,10 +135,13 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-// Generate PDF Badge - Left details, Right photo layout
+// Generate PDF Badge
 const generatePDF = async (req, res) => {
     try {
         const visitor = await visitorService.getVisitorById(req.params.id);
+        if (!visitor) {
+            return res.status(404).json({ message: 'Visitor not found' });
+        }
 
         const pageW = 400;
         const pageH = 550;
@@ -153,118 +156,159 @@ const generatePDF = async (req, res) => {
 
         doc.pipe(res);
 
-        // ===== 1. RED HEADER BAR (full width) =====
-        const headerH = 80;
-        doc.rect(0, 0, pageW, headerH).fill('#e94560');
+        // ========================================
+        // 1. RED HEADER BAR
+        // ========================================
+        doc.rect(0, 0, pageW, 80).fill('#E94560');
         doc.fontSize(22).fill('#ffffff').text('VISITOR PASS', 0, 18, { width: pageW, align: 'center' });
         doc.fontSize(8).fill('#ffffff').text('Visitor Pass Management System', 0, 46, { width: pageW, align: 'center' });
 
-        // ===== 2. PHOTO ON RIGHT SIDE =====
-        const photoSize = 140;
-        const photoX = pageW - photoSize - 20;  // right side with margin
-        const photoY = headerH - 25;            // overlaps header slightly
+        // ========================================
+        // 2. STATUS BADGE (centered below header)
+        // ========================================
+        const statusColor = visitor.status === 'approved' ? '#4ECCA3'
+            : visitor.status === 'checked-in' ? '#2196F3'
+            : visitor.status === 'checked-out' ? '#888888'
+            : '#FFC107';
+        const badgeW = 120;
+        const badgeH = 25;
+        const badgeX = (pageW - badgeW) / 2;
+        const badgeY = 88;
+        doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 12).fill(statusColor);
+        doc.fontSize(10).fill('#ffffff').text(
+            visitor.status.toUpperCase(),
+            badgeX, badgeY + 7,
+            { width: badgeW, align: 'center' }
+        );
 
+        // ========================================
+        // 3. TWO COLUMNS: LEFT = details, RIGHT = photo
+        // ========================================
+        const contentY = badgeY + badgeH + 15;
+
+        // ---- RIGHT: PHOTO ----
+        const photoW = 145;
+        const photoH = 175;
+        const photoX = pageW - photoW - 18;
+        const photoY = contentY;
+
+        let hasPhoto = false;
         if (visitor.photo && visitor.photo.startsWith('data:image')) {
             try {
                 const base64Data = visitor.photo.replace(/^data:image\/\w+;base64,/, '');
                 const photoBuffer = Buffer.from(base64Data, 'base64');
-                // White background behind photo
-                doc.roundedRect(photoX - 5, photoY - 5, photoSize + 10, photoSize + 10, 8).fill('#ffffff');
-                // Photo with red border
-                doc.image(photoBuffer, photoX, photoY, {
-                    width: photoSize,
-                    height: photoSize,
-                    fit: [photoSize, photoSize]
-                });
-                doc.roundedRect(photoX, photoY, photoSize, photoSize, 5).lineWidth(2.5).stroke('#e94560');
-            } catch (e) { /* skip */ }
-        } else {
-            // No photo placeholder
-            doc.roundedRect(photoX - 5, photoY - 5, photoSize + 10, photoSize + 10, 8).fill('#ffffff');
-            doc.roundedRect(photoX, photoY, photoSize, photoSize, 5).fill('#f0f0f0').stroke('#dddddd');
-            doc.fontSize(40).fill('#cccccc').text('?', photoX + photoSize / 2 - 12, photoY + photoSize / 2 - 22);
+                // White border background
+                doc.roundedRect(photoX - 4, photoY - 4, photoW + 8, photoH + 8, 6).fill('#ffffff');
+                doc.roundedRect(photoX - 4, photoY - 4, photoW + 8, photoH + 8, 6).lineWidth(1).stroke('#eeeeee');
+                // Photo image
+                doc.image(photoBuffer, photoX, photoY, { width: photoW, height: photoH, fit: [photoW, photoH] });
+                // Red border
+                doc.roundedRect(photoX, photoY, photoW, photoH, 4).lineWidth(2.5).stroke('#E94560');
+                hasPhoto = true;
+            } catch (e) {
+                // Photo failed, skip
+            }
         }
 
-        // ===== 3. STATUS BADGE (below header, left of photo) =====
-        const statusColor = visitor.status === 'approved' ? '#4ecca3' : visitor.status === 'checked-in' ? '#2196f3' : visitor.status === 'checked-out' ? '#888888' : '#ffc107';
-        const badgeW = 100;
-        const badgeX = 30;
-        const badgeY = headerH + 8;
-        doc.roundedRect(badgeX, badgeY, badgeW, 18, 9).fill(statusColor);
-        doc.fontSize(8).fill('#ffffff').text(visitor.status.toUpperCase(), badgeX, badgeY + 4, { width: badgeW, align: 'center' });
+        if (!hasPhoto) {
+            doc.roundedRect(photoX - 4, photoY - 4, photoW + 8, photoH + 8, 6).fill('#ffffff');
+            doc.roundedRect(photoX, photoY, photoW, photoH, 4).fill('#f5f5f5');
+            doc.roundedRect(photoX, photoY, photoW, photoH, 4).lineWidth(1).stroke('#dddddd');
+            doc.fontSize(14).fill('#cccccc').text('No Photo', photoX, photoY + photoH / 2 - 8, { width: photoW, align: 'center' });
+        }
 
-        // ===== 4. LEFT SIDE DETAILS =====
-        const leftM = 30;
-        const leftW = photoX - leftM - 10; // text width stops before photo
-        const labelSz = 7;
-        const valSz = 11;
-        let y = badgeY + 30;
+        // ---- LEFT: DETAILS ----
+        const leftX = 25;
+        const maxTextW = photoX - leftX - 12;
 
-        // VISITOR NAME
-        doc.fontSize(16).fill('#333333').text(visitor.name, leftM, y, { width: leftW });
-        y += 25;
+        let y = contentY;
 
-        // COMPANY
-        doc.fontSize(labelSz).fill('#878787').text('COMPANY:', leftM, y);
-        y += 11;
-        doc.fontSize(valSz).fill('#333333').text(visitor.company || 'N/A', leftM, y, { width: leftW });
-        y += 22;
+        // Name
+        doc.fontSize(16).fill('#333333').text(visitor.name, leftX, y, { width: maxTextW });
+        y += 26;
 
-        // PURPOSE OF VISIT
-        doc.fontSize(labelSz).fill('#878787').text('PURPOSE OF VISIT', leftM, y);
-        y += 11;
-        doc.fontSize(valSz).fill('#333333').text(visitor.purpose, leftM, y, { width: leftW });
-        y += 22;
+        // Company
+        doc.fontSize(7).fill('#878787').text('COMPANY:', leftX, y);
+        y += 12;
+        doc.fontSize(11).fill('#333333').text(visitor.company || 'N/A', leftX, y, { width: maxTextW });
+        y += 20;
 
-        // HOST
-        doc.fontSize(labelSz).fill('#878787').text('HOST', leftM, y);
-        y += 11;
-        doc.fontSize(valSz).fill('#333333').text(visitor.host?.name || 'N/A', leftM, y, { width: leftW });
-        y += 22;
+        // Purpose
+        doc.fontSize(7).fill('#878787').text('PURPOSE OF VISIT', leftX, y);
+        y += 12;
+        doc.fontSize(11).fill('#333333').text(visitor.purpose, leftX, y, { width: maxTextW });
+        y += 20;
 
-        // PHONE
-        doc.fontSize(labelSz).fill('#878787').text('PHONE', leftM, y);
-        y += 11;
-        doc.fontSize(valSz).fill('#333333').text(visitor.phone, leftM, y, { width: leftW });
-        y += 22;
+        // Host
+        doc.fontSize(7).fill('#878787').text('HOST', leftX, y);
+        y += 12;
+        doc.fontSize(11).fill('#333333').text(visitor.host?.name || 'N/A', leftX, y, { width: maxTextW });
+        y += 20;
 
-        // EXPECTED DATE
-        doc.fontSize(labelSz).fill('#878787').text('EXPECTED DATE', leftM, y);
-        y += 11;
-        doc.fontSize(valSz).fill('#333333').text(new Date(visitor.expectedDate).toLocaleDateString(), leftM, y, { width: leftW });
+        // Phone
+        doc.fontSize(7).fill('#878787').text('PHONE', leftX, y);
+        y += 12;
+        doc.fontSize(11).fill('#333333').text(visitor.phone || 'N/A', leftX, y, { width: maxTextW });
+        y += 20;
 
-        // ===== FIXED BOTTOM SECTION =====
+        // Expected Date
+        doc.fontSize(7).fill('#878787').text('EXPECTED DATE', leftX, y);
+        y += 12;
+        doc.fontSize(11).fill('#333333').text(
+            visitor.expectedDate ? new Date(visitor.expectedDate).toLocaleDateString() : 'N/A',
+            leftX, y, { width: maxTextW }
+        );
+
+        // ========================================
+        // 4. PASS CODE BOX (fixed near bottom)
+        // ========================================
         const footerH = 25;
         const footerY = pageH - footerH;
         const qrLabelY = footerY - 14;
-        const qrSize = 90;
-        const qrY = qrLabelY - qrSize - 4;
-        const passCodeBoxH = 32;
-        const passCodeY = qrY - passCodeBoxH - 10;
+        const qrSize = 88;
+        const qrY = qrLabelY - qrSize - 5;
+        const pcBoxH = 32;
+        const pcBoxY = qrY - pcBoxH - 12;
+        const pcBoxW = 300;
 
-        // ===== 5. PASS CODE BOX =====
-        const boxW = 300;
-        doc.roundedRect((pageW - boxW) / 2, passCodeY, boxW, passCodeBoxH, 5).fill('#f0f0f0');
-        doc.fontSize(7).fill('#878787').text('PASS CODE', (pageW - boxW) / 2, passCodeY + 4, { width: boxW, align: 'center' });
-        doc.fontSize(14).fill('#e94560').text(visitor.passCode, (pageW - boxW) / 2, passCodeY + 16, { width: boxW, align: 'center' });
+        doc.roundedRect((pageW - pcBoxW) / 2, pcBoxY, pcBoxW, pcBoxH, 5).fill('#F0F0F0');
+        doc.fontSize(7).fill('#878787').text('PASS CODE', (pageW - pcBoxW) / 2, pcBoxY + 4, { width: pcBoxW, align: 'center' });
+        doc.fontSize(14).fill('#E94560').text(
+            visitor.passCode || 'N/A',
+            (pageW - pcBoxW) / 2, pcBoxY + 16,
+            { width: pcBoxW, align: 'center' }
+        );
 
-        // ===== 6. QR CODE =====
+        // ========================================
+        // 5. QR CODE
+        // ========================================
         if (visitor.qrCode) {
-            const qrBase64 = visitor.qrCode.replace(/^data:image\/png;base64,/, '');
-            const qrBuffer = Buffer.from(qrBase64, 'base64');
-            doc.image(qrBuffer, (pageW - qrSize) / 2, qrY, { width: qrSize, height: qrSize });
+            try {
+                const qrBase64 = visitor.qrCode.replace(/^data:image\/png;base64,/, '');
+                const qrBuffer = Buffer.from(qrBase64, 'base64');
+                doc.image(qrBuffer, (pageW - qrSize) / 2, qrY, { width: qrSize, height: qrSize });
+            } catch (e) {
+                // QR failed, skip
+            }
         }
 
-        // ===== 7. QR LABEL =====
+        // ========================================
+        // 6. QR LABEL
+        // ========================================
         doc.fontSize(7).fill('#878787').text('Scan QR Code for verification', 0, qrLabelY, { width: pageW, align: 'center' });
 
-        // ===== 8. DARK FOOTER =====
-        doc.rect(0, footerY, pageW, footerH).fill('#1a1a2e');
+        // ========================================
+        // 7. DARK FOOTER
+        // ========================================
+        doc.rect(0, footerY, pageW, footerH).fill('#1A1A2E');
         doc.fontSize(7).fill('#ffffff').text('Generated by Visitor Pass Management System', 0, footerY + 8, { width: pageW, align: 'center' });
 
         doc.end();
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        console.error('PDF Generation Error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ message: 'Error generating PDF: ' + error.message });
+        }
     }
 };
 
