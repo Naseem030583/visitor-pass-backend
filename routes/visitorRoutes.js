@@ -9,7 +9,8 @@ const {
     checkInVisitor,
     checkOutVisitor,
     deleteVisitor,
-    getDashboardStats
+    getDashboardStats,
+    generatePDF
 } = require('../controllers/visitorController');
 const { authenticate, authorize } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -23,6 +24,9 @@ router.get('/stats', authorize('admin', 'security'), getDashboardStats);
 // Check-in and Check-out (security only)
 router.post('/check-in', authorize('admin', 'security'), checkInVisitor);
 router.post('/check-out', authorize('admin', 'security'), checkOutVisitor);
+
+// Generate PDF badge
+router.get('/:id/pdf', generatePDF);
 
 // Approve visitor (admin & employee)
 router.patch('/:id/approve', authorize('admin', 'employee'), approveVisitor);
